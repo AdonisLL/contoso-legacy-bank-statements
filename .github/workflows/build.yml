@@ -1,0 +1,25 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NuGet/setup-nuget@v2
+        with:
+          nuget-version: 6.11.1
+      - uses: microsoft/setup-msbuild@v2
+      - name: Restore
+        run: msbuild Contoso.LegacyBank.Statements.sln /t:Restore /p:RestorePackagesConfig=true
+      - name: Build
+        run: msbuild Contoso.LegacyBank.Statements.sln /m /p:Configuration=Release /p:ContinuousIntegrationBuild=true
+      - name: Test
+        run: dotnet test tests\Contoso.LegacyBank.Statements.Tests\Contoso.LegacyBank.Statements.Tests.csproj --no-build --configuration Release
