@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Contoso.LegacyBank.Statements.Api.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -49,7 +50,25 @@ namespace Contoso.LegacyBank.Statements.Api.Services
 
             try
             {
-                var json = JsonConvert.SerializeObject(document, serializerSettings);
+                var job = new
+                {
+                    schemaVersion = 1,
+                    jobId = document.JobId,
+                    customer = document.Customer.FullName,
+                    account = document.Account.AccountNumber,
+                    fromDate = document.Period.FromDate,
+                    toDate = document.Period.ToDate,
+                    openingBalance = document.Balances.PeriodOpeningBalance,
+                    closingBalance = document.Balances.PeriodClosingBalance,
+                    transactions = document.Transactions.Select(transaction => new
+                    {
+                        date = transaction.PostedDate,
+                        description = transaction.Description,
+                        amount = transaction.Amount,
+                        balance = transaction.Balance
+                    })
+                };
+                var json = JsonConvert.SerializeObject(job, serializerSettings);
                 using (var stream = new FileStream(
                     temporary,
                     FileMode.CreateNew,
@@ -78,8 +97,8 @@ namespace Contoso.LegacyBank.Statements.Api.Services
         {
             foreach (var directory in StatusDirectories)
             {
-                var path = Path.Combine(root, directory, jobId + ".json");
-                if (!File.Exists(path))
+                var path = FindStatusPath(directory, jobId);
+                if (path == null)
                 {
                     continue;
                 }
@@ -92,7 +111,7 @@ namespace Contoso.LegacyBank.Statements.Api.Services
                         JobId = jobId,
                         Status = MapStatus(directory, json),
                         PdfPath = ReadString(json, "pdfPath", "PdfPath", "outputPath", "OutputPath"),
-                        Error = ReadString(json, "error", "Error", "errorMessage", "ErrorMessage"),
+                        Error = ReadString(json, "error", "Error", "errorMessage", "ErrorMessage", "message", "Message"),
                         UpdatedUtc = File.GetLastWriteTimeUtc(path)
                     };
                 }
@@ -110,6 +129,25 @@ namespace Contoso.LegacyBank.Statements.Api.Services
             }
 
             throw new StatementNotFoundException("Statement job " + jobId + " was not found.");
+        }
+
+        private string FindStatusPath(string directory, Guid jobId)
+        {
+            var statusDirectory = Path.Combine(root, directory);
+            if (directory.Equals("Completed", StringComparison.OrdinalIgnoreCase))
+            {
+                var completion = Path.Combine(statusDirectory, jobId + ".completion.json");
+                return File.Exists(completion) ? completion : null;
+            }
+            if (directory.Equals("Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                return Directory.GetFiles(statusDirectory, jobId + ".*.failure.json")
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .FirstOrDefault();
+            }
+
+            var job = Path.Combine(statusDirectory, jobId + ".json");
+            return File.Exists(job) ? job : null;
         }
 
         private static string MapStatus(string directory, JObject json)

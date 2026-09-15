@@ -7,7 +7,7 @@ namespace Contoso.LegacyBank.Statements.Api.Services
     public interface IAccountGateway
     {
         AccountCustomer GetCustomer(string customerNumber);
-        AccountDetails GetAccount(string accountNumber);
+        AccountDetails GetAccount(string customerNumber, string accountNumber);
         IList<StatementTransaction> GetTransactions(string accountNumber, DateTime fromDate, DateTime toDate);
     }
 

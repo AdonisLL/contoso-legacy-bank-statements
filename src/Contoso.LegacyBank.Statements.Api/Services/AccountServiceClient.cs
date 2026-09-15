@@ -1,39 +1,32 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.ServiceModel;
 using System.ServiceModel.Channels;
-using System.Xml;
-using System.Xml.Linq;
 using Contoso.LegacyBank.Statements.Api.Models;
 
 namespace Contoso.LegacyBank.Statements.Api.Services
 {
-    [ServiceContract(Namespace = AccountServiceClient.ContractNamespace)]
+    [ServiceContract(Name = "IAccountService", Namespace = AccountServiceClient.ContractNamespace)]
     internal interface IAccountServiceSoap
     {
-        [OperationContract(
-            Action = AccountServiceClient.ContractNamespace + "IAccountService/GetCustomer",
-            ReplyAction = "*")]
-        Message GetCustomer(Message request);
+        [OperationContract]
+        [FaultContract(typeof(AccountFaultDto))]
+        CustomerDto GetCustomer(string customerNumber);
 
-        [OperationContract(
-            Action = AccountServiceClient.ContractNamespace + "IAccountService/GetAccount",
-            ReplyAction = "*")]
-        Message GetAccount(Message request);
+        [OperationContract]
+        [FaultContract(typeof(AccountFaultDto))]
+        IList<AccountDto> GetAccounts(string customerNumber);
 
-        [OperationContract(
-            Action = AccountServiceClient.ContractNamespace + "IAccountService/GetTransactions",
-            ReplyAction = "*")]
-        Message GetTransactions(Message request);
+        [OperationContract]
+        [FaultContract(typeof(AccountFaultDto))]
+        IList<TransactionDto> GetTransactions(string accountNumber, DateTime fromDate, DateTime toDate);
     }
 
-    // Generated-proxy style WCF client. Raw Message results keep the client tolerant of
-    // data-contract CLR namespaces while preserving the BasicHttpBinding SOAP contract.
     public sealed class AccountServiceClient : IAccountGateway
     {
-        internal const string ContractNamespace = "http://tempuri.org/";
+        internal const string ContractNamespace = "urn:contoso:legacy-bank:accounts:v1";
         private readonly ChannelFactory<IAccountServiceSoap> factory;
         private readonly IAppLogger logger;
 
@@ -50,56 +43,50 @@ namespace Contoso.LegacyBank.Statements.Api.Services
                 CloseTimeout = TimeSpan.FromSeconds(10),
                 SendTimeout = TimeSpan.FromSeconds(30),
                 ReceiveTimeout = TimeSpan.FromSeconds(30),
-                MaxReceivedMessageSize = 4 * 1024 * 1024,
-                ReaderQuotas = XmlDictionaryReaderQuotas.Max
+                MaxReceivedMessageSize = 4 * 1024 * 1024
             };
-            factory = new ChannelFactory<IAccountServiceSoap>(
-                binding,
-                new EndpointAddress(endpointUrl));
+            factory = new ChannelFactory<IAccountServiceSoap>(binding, new EndpointAddress(endpointUrl));
             this.logger = logger;
         }
 
         public AccountCustomer GetCustomer(string customerNumber)
         {
-            var result = Invoke(
-                "GetCustomer",
-                channel => channel.GetCustomer(CreateRequest(
-                    "GetCustomer",
-                    new KeyValuePair<string, object>("customerNumber", customerNumber))));
-            if (IsNilOrEmpty(result))
+            var customer = Invoke("GetCustomer", channel => channel.GetCustomer(customerNumber));
+            if (customer == null)
             {
                 return null;
             }
 
             return new AccountCustomer
             {
-                CustomerNumber = Read(result, "CustomerNumber", "customerNumber", "Number"),
-                FullName = ReadFullName(result),
-                Email = Read(result, "Email", "EmailAddress"),
-                Address = Read(result, "Address", "MailingAddress")
+                CustomerNumber = customer.CustomerNumber,
+                FullName = string.Join(
+                    " ",
+                    new[] { customer.FirstName, customer.LastName }
+                        .Where(value => !string.IsNullOrWhiteSpace(value))),
+                Email = customer.Email
             };
         }
 
-        public AccountDetails GetAccount(string accountNumber)
+        public AccountDetails GetAccount(string customerNumber, string accountNumber)
         {
-            var result = Invoke(
-                "GetAccount",
-                channel => channel.GetAccount(CreateRequest(
-                    "GetAccount",
-                    new KeyValuePair<string, object>("accountNumber", accountNumber))));
-            if (IsNilOrEmpty(result))
+            var accounts = Invoke("GetAccounts", channel => channel.GetAccounts(customerNumber))
+                ?? new List<AccountDto>();
+            var account = accounts.FirstOrDefault(value =>
+                string.Equals(value.AccountNumber, accountNumber, StringComparison.OrdinalIgnoreCase));
+            if (account == null)
             {
                 return null;
             }
 
             return new AccountDetails
             {
-                AccountNumber = Read(result, "AccountNumber", "accountNumber", "Number"),
-                CustomerNumber = Read(result, "CustomerNumber", "customerNumber"),
-                AccountType = Read(result, "AccountType", "Type"),
-                Currency = Read(result, "Currency", "CurrencyCode") ?? "USD",
-                CurrentBalance = ReadDecimal(result, "CurrentBalance", "Balance"),
-                AvailableBalance = ReadDecimal(result, "AvailableBalance", "CurrentBalance", "Balance")
+                AccountNumber = account.AccountNumber,
+                CustomerNumber = account.CustomerNumber,
+                AccountType = account.AccountType,
+                Currency = account.CurrencyCode,
+                CurrentBalance = account.Balance,
+                AvailableBalance = account.Balance
             };
         }
 
@@ -108,60 +95,29 @@ namespace Contoso.LegacyBank.Statements.Api.Services
             DateTime fromDate,
             DateTime toDate)
         {
-            var result = Invoke(
+            var transactions = Invoke(
                 "GetTransactions",
-                channel => channel.GetTransactions(CreateRequest(
-                    "GetTransactions",
-                    new KeyValuePair<string, object>("accountNumber", accountNumber),
-                    new KeyValuePair<string, object>("fromDate", fromDate),
-                    new KeyValuePair<string, object>("toDate", toDate))));
-            if (IsNilOrEmpty(result))
-            {
-                return new List<StatementTransaction>();
-            }
+                channel => channel.GetTransactions(accountNumber, fromDate, toDate))
+                ?? new List<TransactionDto>();
 
-            var elements = result
-                .Descendants()
-                .Where(element =>
-                    element.Elements().Any(child =>
-                        child.Name.LocalName.Equals("Amount", StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            return elements.Select(element => new StatementTransaction
+            return transactions.Select(transaction => new StatementTransaction
             {
-                TransactionId = Read(element, "TransactionId", "Id", "Reference"),
-                PostedDate = ReadDate(element, "PostedDate", "TransactionDate", "Date"),
-                Description = Read(element, "Description", "Narrative", "Memo"),
-                Amount = ReadDecimal(element, "Amount"),
-                Balance = ReadNullableDecimal(element, "Balance", "RunningBalance"),
-                Type = Read(element, "Type", "TransactionType")
+                TransactionId = transaction.ExternalId,
+                PostedDate = transaction.PostedUtc,
+                Description = transaction.Description,
+                Amount = transaction.Amount,
+                Type = transaction.TransactionType
             }).ToList();
         }
 
-        private XElement Invoke(string operation, Func<IAccountServiceSoap, Message> action)
+        private T Invoke<T>(string operation, Func<IAccountServiceSoap, T> action)
         {
             IClientChannel channel = null;
             try
             {
                 var proxy = factory.CreateChannel();
                 channel = (IClientChannel)proxy;
-                using (var response = action(proxy))
-                {
-                    var document = XDocument.Load(response.GetReaderAtBodyContents());
-                    var fault = document.Descendants()
-                        .FirstOrDefault(element => element.Name.LocalName == "Fault");
-                    if (fault != null)
-                    {
-                        throw new FaultException(fault.Value);
-                    }
-
-                    return document.Descendants()
-                        .FirstOrDefault(element =>
-                            element.Name.LocalName.Equals(
-                                operation + "Result",
-                                StringComparison.OrdinalIgnoreCase))
-                        ?? document.Root;
-                }
+                return action(proxy);
             }
             catch (Exception exception)
             {
@@ -187,115 +143,46 @@ namespace Contoso.LegacyBank.Statements.Api.Services
                 }
             }
         }
+    }
 
-        private static Message CreateRequest(
-            string operation,
-            params KeyValuePair<string, object>[] arguments)
-        {
-            var body = new XElement(XName.Get(operation, ContractNamespace));
-            foreach (var argument in arguments)
-            {
-                body.Add(new XElement(
-                    XName.Get(argument.Key, ContractNamespace),
-                    FormatValue(argument.Value)));
-            }
+    [DataContract(Name = "CustomerDto", Namespace = AccountServiceClient.ContractNamespace)]
+    internal sealed class CustomerDto
+    {
+        [DataMember(Order = 1)] public string CustomerNumber { get; set; }
+        [DataMember(Order = 2)] public string FirstName { get; set; }
+        [DataMember(Order = 3)] public string LastName { get; set; }
+        [DataMember(Order = 4)] public string Email { get; set; }
+        [DataMember(Order = 5)] public DateTime CreatedUtc { get; set; }
+    }
 
-            return Message.CreateMessage(
-                MessageVersion.Soap11,
-                ContractNamespace + "IAccountService/" + operation,
-                new XElementBodyWriter(body));
-        }
+    [DataContract(Name = "AccountDto", Namespace = AccountServiceClient.ContractNamespace)]
+    internal sealed class AccountDto
+    {
+        [DataMember(Order = 1)] public string AccountNumber { get; set; }
+        [DataMember(Order = 2)] public string CustomerNumber { get; set; }
+        [DataMember(Order = 3)] public string AccountType { get; set; }
+        [DataMember(Order = 4)] public string CurrencyCode { get; set; }
+        [DataMember(Order = 5)] public decimal Balance { get; set; }
+        [DataMember(Order = 6)] public DateTime OpenedUtc { get; set; }
+        [DataMember(Order = 7)] public bool IsActive { get; set; }
+    }
 
-        private static object FormatValue(object value)
-        {
-            var date = value as DateTime?;
-            return date.HasValue
-                ? date.Value.ToString("O", CultureInfo.InvariantCulture)
-                : value;
-        }
+    [DataContract(Name = "TransactionDto", Namespace = AccountServiceClient.ContractNamespace)]
+    internal sealed class TransactionDto
+    {
+        [DataMember(Order = 1)] public string ExternalId { get; set; }
+        [DataMember(Order = 2)] public string AccountNumber { get; set; }
+        [DataMember(Order = 3)] public DateTime PostedUtc { get; set; }
+        [DataMember(Order = 4)] public decimal Amount { get; set; }
+        [DataMember(Order = 5)] public string Description { get; set; }
+        [DataMember(Order = 6)] public string TransactionType { get; set; }
+    }
 
-        private static bool IsNilOrEmpty(XElement element)
-        {
-            if (element == null)
-            {
-                return true;
-            }
-            var nil = element.Attributes()
-                .FirstOrDefault(attribute => attribute.Name.LocalName == "nil");
-            return (nil != null && nil.Value.Equals("true", StringComparison.OrdinalIgnoreCase))
-                || (!element.HasElements && string.IsNullOrWhiteSpace(element.Value));
-        }
-
-        private static string ReadFullName(XElement element)
-        {
-            var fullName = Read(element, "FullName", "Name");
-            if (!string.IsNullOrWhiteSpace(fullName))
-            {
-                return fullName;
-            }
-            return string.Join(
-                " ",
-                new[] { Read(element, "FirstName"), Read(element, "LastName") }
-                    .Where(value => !string.IsNullOrWhiteSpace(value)));
-        }
-
-        private static string Read(XElement element, params string[] names)
-        {
-            foreach (var name in names)
-            {
-                var match = element.DescendantsAndSelf()
-                    .FirstOrDefault(candidate =>
-                        candidate.Name.LocalName.Equals(name, StringComparison.OrdinalIgnoreCase));
-                if (match != null && !string.IsNullOrWhiteSpace(match.Value))
-                {
-                    return match.Value.Trim();
-                }
-            }
-            return null;
-        }
-
-        private static decimal ReadDecimal(XElement element, params string[] names)
-        {
-            return ReadNullableDecimal(element, names) ?? 0m;
-        }
-
-        private static decimal? ReadNullableDecimal(XElement element, params string[] names)
-        {
-            decimal value;
-            return decimal.TryParse(
-                Read(element, names),
-                NumberStyles.Any,
-                CultureInfo.InvariantCulture,
-                out value)
-                ? value
-                : (decimal?)null;
-        }
-
-        private static DateTime ReadDate(XElement element, params string[] names)
-        {
-            DateTime value;
-            return DateTime.TryParse(
-                Read(element, names),
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind,
-                out value)
-                ? value
-                : DateTime.MinValue;
-        }
-
-        private sealed class XElementBodyWriter : BodyWriter
-        {
-            private readonly XElement body;
-
-            public XElementBodyWriter(XElement body) : base(true)
-            {
-                this.body = body;
-            }
-
-            protected override void OnWriteBodyContents(XmlDictionaryWriter writer)
-            {
-                body.WriteTo(writer);
-            }
-        }
+    [DataContract(Name = "AccountFault", Namespace = AccountServiceClient.ContractNamespace)]
+    internal sealed class AccountFaultDto
+    {
+        [DataMember(Order = 1)] public string Code { get; set; }
+        [DataMember(Order = 2)] public string Message { get; set; }
+        [DataMember(Order = 3)] public string Field { get; set; }
     }
 }

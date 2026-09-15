@@ -42,7 +42,7 @@ namespace Contoso.LegacyBank.Statements.Api.Services
             try
             {
                 customer = accountGateway.GetCustomer(customerNumber);
-                account = accountGateway.GetAccount(accountNumber);
+                account = accountGateway.GetAccount(customerNumber, accountNumber);
                 if (customer == null)
                 {
                     throw new StatementNotFoundException("The customer was not found.");
@@ -84,6 +84,12 @@ namespace Contoso.LegacyBank.Statements.Api.Services
                 .ThenBy(transaction => transaction.TransactionId)
                 .ToList();
             var periodActivity = orderedTransactions.Sum(transaction => transaction.Amount);
+            var runningBalance = account.CurrentBalance - periodActivity;
+            foreach (var transaction in orderedTransactions)
+            {
+                runningBalance += transaction.Amount;
+                transaction.Balance = runningBalance;
+            }
             var jobId = Guid.NewGuid();
             var document = new StatementDocument
             {

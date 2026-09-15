@@ -12,7 +12,7 @@ namespace Contoso.LegacyBank.Statements.Tests
         public IList<StatementTransaction> Transactions { get; set; }
 
         public AccountCustomer GetCustomer(string customerNumber) { return Customer; }
-        public AccountDetails GetAccount(string accountNumber) { return Account; }
+        public AccountDetails GetAccount(string customerNumber, string accountNumber) { return Account; }
         public IList<StatementTransaction> GetTransactions(
             string accountNumber,
             DateTime fromDate,

@@ -40,7 +40,10 @@ namespace Contoso.LegacyBank.Statements.Tests
 
             var path = Path.Combine(root, "Pending", document.JobId + ".json");
             Assert.IsTrue(File.Exists(path));
-            Assert.AreEqual("1.0", JObject.Parse(File.ReadAllText(path))["schemaVersion"]);
+            var job = JObject.Parse(File.ReadAllText(path));
+            Assert.AreEqual(1, job["schemaVersion"]);
+            Assert.AreEqual("Avery Morgan", job["customer"]);
+            Assert.AreEqual("CHK-1", job["account"]);
             Assert.AreEqual(0, Directory.GetFiles(Path.Combine(root, "Pending"), "*.tmp").Length);
             Assert.AreEqual("pending", repository.GetStatus(document.JobId).Status);
         }
@@ -51,7 +54,7 @@ namespace Contoso.LegacyBank.Statements.Tests
             var repository = new FileStatementJobRepository(root, new NullLogger());
             var id = Guid.NewGuid();
             File.WriteAllText(
-                Path.Combine(root, "Completed", id + ".json"),
+                Path.Combine(root, "Completed", id + ".completion.json"),
                 "{\"jobId\":\"" + id + "\",\"pdfPath\":\"C:\\\\statements\\\\x.pdf\"}");
 
             var status = repository.GetStatus(id);
@@ -66,8 +69,8 @@ namespace Contoso.LegacyBank.Statements.Tests
             var repository = new FileStatementJobRepository(root, new NullLogger());
             var id = Guid.NewGuid();
             File.WriteAllText(
-                Path.Combine(root, "Failed", id + ".json"),
-                "{\"error\":\"PDF rendering failed\"}");
+                Path.Combine(root, "Failed", id + ".diagnostic.failure.json"),
+                "{\"message\":\"PDF rendering failed\"}");
 
             var status = repository.GetStatus(id);
 
@@ -82,8 +85,8 @@ namespace Contoso.LegacyBank.Statements.Tests
                 SchemaVersion = "1.0",
                 JobId = Guid.NewGuid(),
                 CreatedUtc = DateTime.UtcNow,
-                Customer = new StatementCustomer(),
-                Account = new StatementAccount(),
+                Customer = new StatementCustomer { FullName = "Avery Morgan" },
+                Account = new StatementAccount { AccountNumber = "CHK-1" },
                 Period = new StatementPeriod(),
                 Balances = new StatementBalances(),
                 Transactions = new StatementTransaction[0]
