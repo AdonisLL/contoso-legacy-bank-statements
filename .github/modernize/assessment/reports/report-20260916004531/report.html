@@ -256,16 +256,7 @@ if (document.readyState === 'loading') {
 <div id="tab-issues" class="tab-panel active">
 <div class="target-select-container">
   <label for="target-select">Target Compute Service:</label>
-  <select id="target-select" onchange="onTargetChange(this.value)">
-    <option value="AppService.Windows">Azure App Service (Windows)</option>
-    <option value="AppService.Linux">Azure App Service (Linux)</option>
-    <option value="AKS.Linux">Azure Kubernetes Service (Linux)</option>
-    <option value="AKS.Windows">Azure Kubernetes Service (Windows)</option>
-    <option value="ACA">Azure Container Apps</option>
-    <option value="AppServiceContainer.Linux">Azure App Service Container (Linux)</option>
-    <option value="AppServiceContainer.Windows">Azure App Service Container (Windows)</option>
-    <option value="AppServiceManagedInstance.Windows">Azure App Service Managed Instance (Windows)</option>
-  </select>
+  <select id="target-select" onchange="onTargetChange(this.value)"></select>
 </div>
 <div class="report-card">
   <h2>Issue Summary</h2>
@@ -594,6 +585,20 @@ function clearAllFilters() {
   applyFilters();
 }
 
+var targetIds = ["AppService.Windows", "AppService.Linux", "AKS.Linux", "AKS.Windows", "ACA", "AppServiceContainer.Linux", "AppServiceContainer.Windows", "AppServiceManagedInstance.Windows"];
+var targetDisplayNames = ["Azure App Service (Windows)", "Azure App Service (Linux)", "Azure Kubernetes Service (Linux)", "Azure Kubernetes Service (Windows)", "Azure Container Apps", "Azure App Service Container (Linux)", "Azure App Service Container (Windows)", "Azure App Service Managed Instance (Windows)"];
+
+function populateTargetSelect() {
+  var select = document.getElementById('target-select');
+  if (!select || select.options.length > 0) return;
+  for (var i = 0; i < targetIds.length; i++) {
+    var option = document.createElement('option');
+    option.value = targetIds[i];
+    option.textContent = targetDisplayNames[i] || targetIds[i];
+    select.appendChild(option);
+  }
+}
+
 function onTargetChange(targetId) {
   _currentTarget = targetId;
   var rows = document.querySelectorAll('.issue-row[data-targets]');
@@ -698,5 +703,5 @@ function buildDonutSvg(m, p, o) {
   return svg;
 }
 </script>
-<script>document.addEventListener('DOMContentLoaded', function() { onTargetChange('AppService.Windows'); });</script>
+<script>document.addEventListener('DOMContentLoaded', function() { populateTargetSelect(); onTargetChange(targetIds[0]); });</script>
 </div></body></html>
