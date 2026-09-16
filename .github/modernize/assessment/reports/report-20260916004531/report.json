@@ -29,8 +29,7 @@
     "os": [
       "windows",
       "linux"
-    ],
-    "securityAssessmentNote": "The top-level security array contains CVE/CWE assessment findings. summary.charts.category.AppCAT Security is an AppCAT cloud-readiness category, not the CVE/CWE security assessment result count."
+    ]
   },
   "summary": {
     "totalProjects": 2,
@@ -46,7 +45,7 @@
       },
       "category": {
         "Local": 3,
-        "AppCAT Security": 1
+        "Cloud Readiness - Security": 1
       }
     }
   },
