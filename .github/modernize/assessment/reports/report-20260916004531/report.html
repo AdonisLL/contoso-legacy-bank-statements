@@ -189,44 +189,6 @@ window.__renderMermaidIn = function(container) {
   if (container) { window.__mermaidPending.push(container); }
 };
 </script>
-<script type="module">
-import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true }, sequence: { useMaxWidth: true } });
-
-window.__renderMermaidIn = function(container) {
-  var nodes = container ? container.querySelectorAll('.mermaid:not([data-processed])') : [];
-  if (nodes.length > 0) {
-    mermaid.run({ nodes: Array.from(nodes) }).then(function() {
-      nodes.forEach(function(node) {
-        if (!node.querySelector('.mermaid-zoom-hint')) {
-          var hint = document.createElement('span');
-          hint.className = 'mermaid-zoom-hint';
-          hint.textContent = 'Click to expand';
-          node.appendChild(hint);
-        }
-      });
-    });
-  }
-};
-
-var drained = new Set();
-(window.__mermaidPending || []).forEach(function(c) {
-  if (!drained.has(c)) { drained.add(c); window.__renderMermaidIn(c); }
-});
-window.__mermaidPending = [];
-window.__mermaidReady = true;
-
-function renderActivePanels() {
-  document.querySelectorAll('.tab-panel.active').forEach(function(p) {
-    if (!drained.has(p)) { drained.add(p); window.__renderMermaidIn(p); }
-  });
-}
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', renderActivePanels);
-} else {
-  renderActivePanels();
-}
-</script>
 </head><body>
 <div id="diagram-lightbox" class="diagram-lightbox" role="dialog" aria-modal="true">
   <button class="diagram-lightbox-close" id="diagram-lightbox-close" aria-label="Close">&#x2715;</button>
