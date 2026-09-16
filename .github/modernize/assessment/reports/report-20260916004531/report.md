@@ -5,7 +5,9 @@
 | Metric | Value |
 |--------|-------|
 | Total Issues | 3 |
-| Mandatory Blockers | 1 |
+| Total Incidents | 4 |
+| Mandatory Blockers | 2 |
+| Optional Issues | 1 |
 | Potential Issues | 1 |
 
 ## Component Information
