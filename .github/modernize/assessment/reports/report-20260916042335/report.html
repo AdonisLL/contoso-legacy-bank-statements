@@ -258,10 +258,13 @@ if (document.readyState === 'loading') {
   <label for="target-select">Target Compute Service:</label>
   <select id="target-select" onchange="onTargetChange(this.value)">
     <option value="AppService.Windows">Azure App Service</option>
-    <option value="AppService.Linux">Azure Kubernetes Service</option>
-    <option value="AKS.Linux">Azure Container Apps</option>
-    <option value="AKS.Windows">Azure App Service Container</option>
-    <option value="ACA">Azure App Service Managed Instance</option>
+    <option value="AppService.Linux">Azure App Service</option>
+    <option value="AKS.Linux">Azure Kubernetes Service</option>
+    <option value="AKS.Windows">Azure Kubernetes Service</option>
+    <option value="ACA">Azure Container Apps</option>
+    <option value="AppServiceContainer.Linux">Azure App Service Container</option>
+    <option value="AppServiceContainer.Windows">Azure App Service Container</option>
+    <option value="AppServiceManagedInstance.Windows">Azure App Service Managed Instance</option>
   </select>
 </div>
 <div class="report-card">
