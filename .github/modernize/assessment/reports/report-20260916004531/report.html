@@ -530,26 +530,11 @@ function onMultiSelectChange(msId, label) {
 }
 
 function applyFilters() {
-  var selectedDomains = getMultiSelectValues('domain-ms');
   var selectedCrits = getMultiSelectValues('criticality-ms');
-
-  var sections = document.querySelectorAll('.issue-section');
-  for (var i = 0; i < sections.length; i++) {
-    var domain = sections[i].getAttribute('data-domain');
-    sections[i].style.display = (selectedDomains.length === 0 || selectedDomains.indexOf(domain) >= 0) ? '' : 'none';
-  }
 
   var rows = document.querySelectorAll('.issue-row');
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
-    var section = row.closest('.issue-section');
-    if (section && section.style.display === 'none') {
-      row.style.display = 'none';
-      var next = row.nextElementSibling;
-      if (next && next.classList.contains('detail-row')) next.style.display = 'none';
-      continue;
-    }
-
     var show = true;
     if (_currentTarget && row.hasAttribute('data-targets')) {
       var targetsStr = row.getAttribute('data-targets');
@@ -578,8 +563,6 @@ function applyFilters() {
 
 function clearAllFilters() {
   document.querySelectorAll('.multi-select input[type=checkbox]').forEach(function(cb) { cb.checked = false; });
-  var domainBtn = document.querySelector('#domain-ms .multi-select-btn');
-  if (domainBtn) domainBtn.textContent = 'Domain';
   var critBtn = document.querySelector('#criticality-ms .multi-select-btn');
   if (critBtn) critBtn.textContent = 'Criticality';
   applyFilters();
@@ -641,20 +624,6 @@ function onTargetChange(targetId) {
 
     if (!domainCrits[domain]) domainCrits[domain] = {mandatory:0,potential:0,optional:0};
     domainCrits[domain][newSeverity] = (domainCrits[domain][newSeverity] || 0) + 1;
-  }
-
-  var secSection = document.querySelector('.issue-section[data-domain="security"]');
-  if (secSection) {
-    var secRows = secSection.querySelectorAll('.issue-row');
-    for (var j = 0; j < secRows.length; j++) {
-      if (!secRows[j].hasAttribute('data-targets') || secRows[j].getAttribute('data-targets') === '') {
-        var sp = parseFloat(secRows[j].querySelector('.sp-cell').textContent) || 0;
-        totalEffort += sp;
-        if (!domainCrits['security']) domainCrits['security'] = {mandatory:0,potential:0,optional:0};
-        var sc = secRows[j].getAttribute('data-criticality') || 'optional';
-        domainCrits['security'][sc] = (domainCrits['security'][sc] || 0) + 1;
-      }
-    }
   }
 
   var label = totalEffort < 20 ? 'S' : totalEffort < 50 ? 'M' : totalEffort < 100 ? 'L' : 'XL';
